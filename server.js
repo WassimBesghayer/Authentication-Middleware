@@ -12,5 +12,9 @@ require("dotenv").config();
 connectDB();
 const PORT=process.env.PORT;
 
+// defining routes
+app.use(express.json()) // defining json body
+app.use("/user",require("./routes/user.js"))
+
 // setting connexion PORT + checking functioning
 app.listen(PORT, (err)=>err? console.log(err) : console.log(`the server is running well on ${PORT}!`));
