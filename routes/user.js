@@ -1,69 +1,87 @@
-const express = require("express")
-const router = express.Router()
-const User = require("../models/User.js")
-const bcrypt = require("bcrypt")
+const express = require("express");
+const User = require("../models/User");
+const router = express.Router();
+const bcrypt = require("bcrypt");
+const user = require("../models/User");
+const jwt = require("jsonwebtoken");
+const {
+  loginRules,
+  registerRules,
+  validation,
+} = require("../middleware/validator");
+const isAuth = require("../middleware/passport");
 
+//register
+router.post("/register", registerRules(), validation, async (req, res) => {
+  const { name, lastname, email, password } = req.body;
+  try {
+    const newUser = new User({ name, lastname, email, password });
+    // check if the email exist
+    const searchedUser = await User.findOne({ email });
 
+    if (searchedUser) {
+      return res.status(400).send({ msg: "email already exist" });
+    }
 
-router.get("/",(req,res)=>{
-    res.send("hello world")
+    // hash password
+    const salt = 10;
+    const genSalt = await bcrypt.genSalt(salt);
+    const hashedPassword = await bcrypt.hash(password, genSalt);
+    console.log(hashedPassword);
+    newUser.password = hashedPassword;
+    // generation token
+    //save  the user
+    const newUserToken = await newUser.save();
+    const payload = {
+      _id: newUser._id,
+      name: newUserToken.name,
+    };
+    const token = await jwt.sign(payload, process.env.SecretOrkey, {
+      expiresIn: 3600,
+    });
+
+    res
+      .status(200)
+      .send({ newUserToken, msq: "user is saved", token: `bearer ${token}` });
+  } catch (error) {
+    res.send(error);
+    console.log(error);
+  }
+});
+//login
+router.post("/login", loginRules(), validation, async (req, res) => {
+  const { email, password } = req.body;
+  try {
+    //find if the user exist
+    const searchedUser = await User.findOne({ email });
+    //find if the email not exist
+    if (!searchedUser) {
+      return res.status(400).send({ msg: "Bad credential" });
+    }
+    //if password are equal
+    const match = await bcrypt.compare(password, searchedUser.password);
+    if (!match) {
+      return res.status(400).send({ msg: "Bad credential" });
+    }
+    //creer un token
+    const payload = {
+      _id: searchedUser._id,
+      name: searchedUser.name,
+    };
+    const token = await jwt.sign(payload, process.env.SecretOrKey, {
+      expiresIn: 3600,
+    });
+    //console.log(token)
+    //send the user
+    res
+      .status(200)
+      .send({ user: searchedUser, msg: "success", token: `bearer ${token}` });
+  } catch (error) {
+    res.status(500).send({ msg: "Can not get the user" });
+  }
 });
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// register
-router.post("/register",async (req, res) => {
-    const {name, surname,email,password} = req.body;
-    try {
-        // user creation
-        const newUser = new User({name, surname,email,password})
-
-        // e-mail existance check + unicity checking
-        const searchUser = await User.findOne({email})
-        if(searchUser) {
-            return res.status(400).send({msg: "user already exists !"});
-        }
-
-        // hashing the password
-        const saltRounds = 10;  // see documentation (Usage section) : https://www.npmjs.com/package/bcrypt
-        const genSalt = bcrypt.genSalt(salt);
-        const hashedPassword = bcrypt.hash(password, genSalt);
-        console.log(hashedPassword);
-        newUser.password = hashedPassword
-
-        // save the user
-        await newUser.save()
-        res.status(200).send({newUser, msg: "user is saved"})
-    } catch (error) {
-        res.status(500).send("cannot the user!")    // 500 → error N°
-    }
-})
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// login
-router.post("/login", async(req, res)=>{
-    const {email, password} = req.body 
-    try {
-        // find if the user exists or not
-        const searchUser = await User.findOne({email});
-
-        // if the email not existing
-        if(!searchUser) {
-            return res.status(400).send({msg: "Bad credential !"})
-        }
-
-        // password ==
-        const match = await bcrypt.compare(password, searchUser.password);    // 👈 To check a password
-        if(!match) {
-            return res.status(400).send({msg: "Bad credential !"});
-        }
-        
-    // send the user
-    res.status(200).send({user: searchUser, msg: "user is saved."})
-    } catch (error) {
-        res.status(500).send({msg: "canot get the user"})
-    }
-})
-
-
-
-module.exports = router
+router.get("/current", isAuth(), (req, res) => {
+  res.status(200).send({ user: req.user });
+});
+module.exports = router;
