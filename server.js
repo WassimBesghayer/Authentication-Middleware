@@ -13,7 +13,7 @@ connectDB();
 const PORT=process.env.PORT;
 
 // defining routes
-app.use(express.json()) // defining json body
+app.use(express.json()) // defining json body part
 app.use("/user",require("./routes/user.js"))
 
 // setting connexion PORT + checking functioning
